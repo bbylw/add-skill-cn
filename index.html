@@ -1,374 +1,710 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="dark scroll-smooth scroll-pt-24">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>add-skill - 为你的 AI 编程助手安装技能</title>
+    <title>Agent Skills [核心系统交互] - 开源命令行工具</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"DM Sans"', 'sans-serif'],
+                        display: ['"Space Grotesk"', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    },
+                    colors: {
+                        carbon: {
+                            950: '#030303',
+                            900: '#080808',
+                            800: '#111111',
+                            700: '#1F1F1F',
+                            600: '#27272A',
+                        },
+                        accent: {
+                            cyan: '#00F0FF',
+                            lime: '#CCFF00',
+                            orange: '#FF5500',
+                        }
+                    },
+                    boxShadow: {
+                        'brutal-cyan': '4px 4px 0px 0px rgba(0, 240, 255, 0.4)',
+                        'brutal-lime': '4px 4px 0px 0px rgba(204, 255, 0, 0.4)',
+                        'brutal-white': '4px 4px 0px 0px rgba(255, 255, 255, 0.1)',
+                    },
+                    animation: {
+                        'marquee': 'marquee 30s linear infinite',
+                        'blink-caret': 'blinkCaret 1s step-end infinite',
+                    },
+                    keyframes: {
+                        marquee: {
+                            '0%': { transform: 'translateX(0)' },
+                            '100%': { transform: 'translateX(-50%)' },
+                        },
+                        blinkCaret: {
+                            '0%, 100%': { opacity: '1' },
+                            '50%': { opacity: '0' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        .code-block { background-color: #1e1e1e; color: #d4d4d4; }
-        .gradient-text { background: linear-gradient(90deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        body {
+            background-color: #030303;
+            color: #EDEDED;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        .noise-bg {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 50;
+            opacity: 0.04;
+            mix-blend-mode: overlay;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+
+        .scanlines {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 49;
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0) 50%, rgba(0, 0, 0, 0.1) 50%, rgba(0, 0, 0, 0.1));
+            background-size: 100% 4px;
+        }
+
+        .grid-pattern {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background-size: 40px 40px;
+            background-image:
+                linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        }
+
+        /* Essential UI Component: Brutal Panel */
+        .bento-panel {
+            background: #080808;
+            border: 1px solid #1F1F1F;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .bento-panel:hover {
+            border-color: #00F0FF;
+            transform: translate(-3px, -3px);
+            box-shadow: 6px 6px 0px 0px rgba(0, 240, 255, 0.25);
+        }
+
+        /* Top-left mechanical corner marker */
+        .bento-panel::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: -1px;
+            width: 8px;
+            height: 8px;
+            border-top: 2px solid #00F0FF;
+            border-left: 2px solid #00F0FF;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .bento-panel:hover::before {
+            opacity: 1;
+        }
+
+        /* Tech Table Strict Styling */
+        .tech-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: inherit;
+        }
+
+        .tech-table th,
+        .tech-table td {
+            border: 1px solid #1F1F1F;
+            padding: 18px 24px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .tech-table th {
+            font-family: "JetBrains Mono", monospace;
+            background: #030303;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: #71717A;
+            font-weight: 700;
+        }
+
+        .tech-table tr {
+            background: #080808;
+        }
+
+        .tech-table tr:hover td {
+            background: #0A0A0A;
+            color: #fff;
+        }
+
+        /* Custom Scrollbar, Industrial Style */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #030303;
+            border-left: 1px solid #1F1F1F;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #27272A;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00F0FF;
+        }
+
+        .highlight-text {
+            background: #CCFF00;
+            color: #030303;
+            padding: 0 4px;
+            font-weight: 700;
+            display: inline-block;
+        }
+
+        .code-block {
+            background: #030303;
+            border: 1px solid #1F1F1F;
+        }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900 scroll-smooth">
 
-    <!-- Navigation -->
-    <nav class="fixed top-0 w-full bg-white/80 backdrop-blur-md border-b border-slate-200 z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16 items-center">
-                <div class="flex items-center space-x-2">
-                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
-                        <i class="fas fa-bolt"></i>
-                    </div>
-                    <span class="text-xl font-bold tracking-tight">add-skill</span>
+<body class="selection:bg-accent-lime/40 selection:text-white">
+    <!-- Visual Overlays -->
+    <div class="noise-bg"></div>
+    <div class="scanlines"></div>
+    <div class="grid-pattern"></div>
+
+    <!-- Strict Top Navigation -->
+    <nav class="fixed top-0 w-full z-40 bg-carbon-950/80 backdrop-blur-md border-b border-carbon-700">
+        <div class="max-w-[1440px] mx-auto px-6 h-16 flex items-center justify-between">
+            <a href="#" class="flex items-center gap-4 cursor-pointer group">
+                <div
+                    class="w-8 h-8 border border-carbon-600 flex items-center justify-center bg-carbon-900 group-hover:border-accent-cyan group-hover:bg-accent-cyan/10 transition-colors">
+                    <i data-lucide="cpu" class="w-4 h-4 text-accent-cyan"></i>
                 </div>
-                <div class="hidden md:flex space-x-8 text-sm font-medium text-slate-600">
-                    <a href="#about" class="hover:text-blue-600 transition">简介</a>
-                    <a href="#usage" class="hover:text-blue-600 transition">使用方法</a>
-                    <a href="#installation" class="hover:text-blue-600 transition">安装路径</a>
-                    <a href="#creation" class="hover:text-blue-600 transition">创建技能</a>
-                    <a href="https://github.com/vercel-labs/add-skill" target="_blank" class="hover:text-blue-600 transition"><i class="fab fa-github mr-1"></i>GitHub</a>
-                </div>
+                <span class="font-display font-bold text-lg tracking-widest uppercase">
+                    Agent<span class="text-accent-cyan">Skills</span><span class="text-carbon-600">_CLI</span>
+                </span>
+            </a>
+            <div class="hidden md:flex gap-8 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-500">
+                <a href="#features" class="hover:text-accent-cyan transition-colors">[ 核心特性 ]</a>
+                <a href="#install" class="hover:text-accent-cyan transition-colors">[ 节点安装 ]</a>
+                <a href="#commands" class="hover:text-accent-cyan transition-colors">[ 矩阵指令 ]</a>
+                <a href="#agents" class="hover:text-accent-cyan transition-colors">[ 兼容性 ]</a>
             </div>
+            <a href="https://github.com/vercel-labs/agent-skills" target="_blank"
+                class="font-mono text-xs px-4 py-2 border border-carbon-600 hover:border-accent-lime hover:text-accent-lime transition-all flex items-center gap-2">
+                <i data-lucide="github" class="w-3.5 h-3.5"></i> 代码源
+            </a>
         </div>
     </nav>
 
-    <!-- Hero Section -->
-    <header class="pt-32 pb-16 px-4">
-        <div class="max-w-4xl mx-auto text-center">
-            <h1 class="text-5xl md:text-6xl font-extrabold mb-6">
-                为你的 <span class="gradient-text">AI 编程助手</span><br>注入新技能
+    <!-- Industrial Hero Section -->
+    <section id="install"
+        class="pt-48 pb-32 px-6 border-b border-carbon-700 bg-gradient-to-b from-carbon-900/50 to-transparent">
+        <div class="max-w-5xl mx-auto flex flex-col items-center md:items-start text-center md:text-left">
+            <div
+                class="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-cyan mb-6 px-3 py-1 border border-accent-cyan/30 bg-accent-cyan/5 flex items-center gap-3">
+                <span class="w-2 h-2 bg-accent-cyan animate-pulse"></span>
+                系统状态: 稳定版本发布 v1.0.0
+            </div>
+            <h1
+                class="font-display text-5xl md:text-7xl lg:text-[5.5rem] font-bold tracking-tighter leading-[1] mb-8 text-white">
+                为您的人工智能<br />
+                配置<span class="text-carbon-600">深层</span> <span class="highlight-text">工程级挂载</span>
             </h1>
-            <p class="text-xl text-slate-600 mb-10 leading-relaxed">
-                add-skill 是一个强大的命令行工具，允许你从任何 Git 仓库快速安装技能指令集，<br class="hidden md:block">
-                支持 OpenCode, Claude Code, Codex, Cursor 和 Antigravity。
+            <p class="font-sans text-xl md:text-2xl text-zinc-400 max-w-3xl mb-12 leading-relaxed">
+                Agent Skills 是通往开源智能体硬件级技能生态的基础设施引擎。这是一个极度严谨的控制台，支持
+                <strong class="text-white">Claude Code, Cursor, Windsurf, OpenCode</strong> 以及 40 余款智能助手。向环境内瞬时注入专业研发能力。
             </p>
-            
-            <div class="relative max-w-lg mx-auto mb-12">
-                <div class="code-block rounded-xl p-4 pl-6 text-left font-mono text-sm shadow-2xl flex justify-between items-center">
-                    <span>npx add-skill vercel-labs/agent-skills</span>
-                    <button onclick="copyToClipboard('npx add-skill vercel-labs/agent-skills')" class="hover:text-white transition p-2">
-                        <i class="far fa-copy text-lg"></i>
+
+            <!-- Terminal Install Box -->
+            <div class="w-full max-w-2xl code-block relative group">
+                <div class="h-8 border-b border-carbon-700 bg-carbon-900 flex items-center px-4 justify-between">
+                    <div class="flex gap-2">
+                        <div class="w-2.5 h-2.5 border border-carbon-600"></div>
+                        <div class="w-2.5 h-2.5 border border-carbon-600"></div>
+                        <div class="w-2.5 h-2.5 border border-carbon-600"></div>
+                    </div>
+                    <div class="font-mono text-[10px] text-carbon-600 uppercase">终端执行器</div>
+                </div>
+                <div class="p-6 flex items-center justify-between">
+                    <div class="font-mono text-lg md:text-xl flex items-center gap-4 overflow-x-auto whitespace-nowrap">
+                        <span class="text-accent-cyan">~&gt;</span>
+                        <code
+                            class="text-zinc-200">npx skills add <span class="text-accent-lime">vercel-labs/agent-skills</span></code>
+                        <span class="w-2.5 h-5 bg-zinc-500 animate-blink-caret inline-block"></span>
+                    </div>
+                    <button class="text-zinc-500 hover:text-accent-cyan transition-colors" title="复制指令"
+                        onclick="navigator.clipboard.writeText('npx skills add vercel-labs/agent-skills')">
+                        <i data-lucide="copy" class="w-5 h-5"></i>
                     </button>
                 </div>
-                <p class="text-xs text-slate-400 mt-3 italic">快速开始：运行此命令体验示例技能</p>
-            </div>
-
-            <div class="flex flex-wrap justify-center gap-4 text-sm font-semibold text-slate-500">
-                <span class="px-4 py-2 bg-white border border-slate-200 rounded-full shadow-sm">OpenCode</span>
-                <span class="px-4 py-2 bg-white border border-slate-200 rounded-full shadow-sm">Claude Code</span>
-                <span class="px-4 py-2 bg-white border border-slate-200 rounded-full shadow-sm">Codex</span>
-                <span class="px-4 py-2 bg-white border border-slate-200 rounded-full shadow-sm">Cursor</span>
-                <span class="px-4 py-2 bg-white border border-slate-200 rounded-full shadow-sm">Antigravity</span>
             </div>
         </div>
-    </header>
+    </section>
 
-    <main class="max-w-5xl mx-auto px-4 py-12 space-y-24">
-        
-        <!-- Section: What are skills -->
-        <section id="about" class="scroll-mt-24">
-            <div class="flex items-center space-x-3 mb-6">
-                <h2 class="text-3xl font-bold">什么是 Agent Skills？</h2>
-            </div>
-            <div class="grid md:grid-cols-2 gap-8 items-center">
-                <div class="prose prose-slate max-w-none text-slate-600 leading-relaxed">
-                    <p>Agent skills 是可重用的指令集，能够扩展你的 AI 编程助手的能力。它们定义在带有 YAML 前置数据的 <code>SKILL.md</code> 文件中，包含名称和描述。</p>
-                    <p class="mt-4">技能可以让助手执行各种专业化任务，例如：</p>
-                    <ul class="list-disc list-inside mt-2 space-y-2">
-                        <li>从 Git 提交历史生成发布说明</li>
-                        <li>遵循团队规范创建 Pull Request</li>
-                        <li>集成外部工具（如 Linear、Notion 等）</li>
-                    </ul>
-                </div>
-                <div class="bg-blue-50 border border-blue-100 rounded-2xl p-8">
-                    <div class="flex items-center space-x-3 mb-4 text-blue-600">
-                        <i class="fas fa-lightbulb"></i>
-                        <span class="font-bold">核心价值</span>
-                    </div>
-                    <p class="text-blue-800/80 text-sm">通过模块化的技能体系，你可以将最佳实践固化为机器可理解的指令，让 AI 真正成为你团队中熟悉流程的一员。</p>
-                </div>
-            </div>
-        </section>
+    <!-- Ticker Tape Marquee -->
+    <div class="border-b border-carbon-700 bg-carbon-900 py-4 overflow-hidden relative">
+        <div class="flex animate-marquee whitespace-nowrap gap-12 items-center text-carbon-600">
+            <!-- Set 1 -->
+            <div class="font-mono text-xl font-bold uppercase tracking-widest"><span
+                    class="text-zinc-400">CLAUDE_CODE</span> [已就绪]</div>
+            <div class="w-1.5 h-1.5 bg-carbon-600"></div>
+            <div class="font-mono text-xl font-bold uppercase tracking-widest"><span class="text-zinc-400">CURSOR</span>
+                [已就绪]</div>
+            <div class="w-1.5 h-1.5 bg-carbon-600"></div>
+            <div class="font-mono text-xl font-bold uppercase tracking-widest"><span
+                    class="text-zinc-400">ANTIGRAVITY</span> [已就绪]</div>
+            <div class="w-1.5 h-1.5 bg-carbon-600"></div>
+            <div class="font-mono text-xl font-bold uppercase tracking-widest"><span
+                    class="text-zinc-400">WINDSURF</span> [已就绪]</div>
+            <div class="w-1.5 h-1.5 bg-carbon-600"></div>
+            <div class="font-mono text-xl font-bold uppercase tracking-widest"><span
+                    class="text-zinc-400">OPENCODE</span> [已就绪]</div>
+            <div class="w-1.5 h-1.5 bg-carbon-600"></div>
+            <div class="font-mono text-xl font-bold uppercase tracking-widest"><span class="text-zinc-400">TRAE</span>
+                [已就绪]</div>
+            <div class="w-1.5 h-1.5 bg-carbon-600"></div>
+            <div class="font-mono text-xl font-bold uppercase tracking-widest"><span class="text-zinc-400">CLINE</span>
+                [已就绪]</div>
+            <!-- Set 2 -->
+            <div class="w-1.5 h-1.5 bg-carbon-600"></div>
+            <div class="font-mono text-xl font-bold uppercase tracking-widest"><span
+                    class="text-zinc-400">CLAUDE_CODE</span> [已就绪]</div>
+            <div class="w-1.5 h-1.5 bg-carbon-600"></div>
+            <div class="font-mono text-xl font-bold uppercase tracking-widest"><span class="text-zinc-400">CURSOR</span>
+                [已就绪]</div>
+            <div class="w-1.5 h-1.5 bg-carbon-600"></div>
+            <div class="font-mono text-xl font-bold uppercase tracking-widest"><span
+                    class="text-zinc-400">ANTIGRAVITY</span> [已就绪]</div>
+            <div class="w-1.5 h-1.5 bg-carbon-600"></div>
+            <div class="font-mono text-xl font-bold uppercase tracking-widest"><span
+                    class="text-zinc-400">WINDSURF</span> [已就绪]</div>
+            <div class="w-1.5 h-1.5 bg-carbon-600"></div>
+            <div class="font-mono text-xl font-bold uppercase tracking-widest"><span
+                    class="text-zinc-400">OPENCODE</span> [已就绪]</div>
+        </div>
+    </div>
 
-        <!-- Section: Usage -->
-        <section id="usage" class="scroll-mt-24">
-            <h2 class="text-3xl font-bold mb-8">使用指南</h2>
-            
-            <div class="space-y-12">
-                <!-- Source Formats -->
+    <main class="py-24 space-y-32">
+        <!-- Structural Features (Bento Grid) -->
+        <section id="features" class="max-w-[1440px] mx-auto px-6">
+            <div
+                class="mb-16 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-carbon-700 pb-8">
                 <div>
-                    <h3 class="text-xl font-semibold mb-4 text-slate-700">来源格式</h3>
-                    <p class="text-slate-600 mb-4 text-sm"><code>&lt;source&gt;</code> 参数支持多种格式：</p>
-                    <div class="code-block rounded-xl p-6 font-mono text-sm space-y-3">
-                        <div class="text-slate-500"># GitHub 简写</div>
-                        <div>npx add-skill vercel-labs/agent-skills</div>
-                        <div class="text-slate-500 mt-4"># 完整的 GitHub URL</div>
-                        <div>npx add-skill https://github.com/vercel-labs/agent-skills</div>
-                        <div class="text-slate-500 mt-4"># 指定仓库中的某个技能路径</div>
-                        <div>npx add-skill https://github.com/vercel-labs/agent-skills/tree/main/skills/frontend-design</div>
-                        <div class="text-slate-500 mt-4"># 其他 Git 仓库</div>
-                        <div>npx add-skill git@github.com:vercel-labs/agent-skills.git</div>
-                    </div>
+                    <h2 class="font-display text-3xl md:text-4xl font-bold tracking-tight mb-4 uppercase">
+                        Enterprise<span class="text-accent-cyan">_架构管理</span>
+                    </h2>
+                    <p class="font-sans text-zinc-400 max-w-2xl text-lg">
+                        覆盖智能体技能挂载全生命周期的工程学控制台。彻底摒弃未经受控的手动依赖植入。
+                    </p>
                 </div>
-
-                <!-- Options -->
-                <div>
-                    <h3 class="text-xl font-semibold mb-4 text-slate-700">配置选项</h3>
-                    <div class="overflow-hidden border border-slate-200 rounded-xl">
-                        <table class="w-full text-left text-sm">
-                            <thead class="bg-slate-100 text-slate-600 border-b border-slate-200">
-                                <tr>
-                                    <th class="px-6 py-4 font-semibold">选项</th>
-                                    <th class="px-6 py-4 font-semibold">描述</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-100">
-                                <tr>
-                                    <td class="px-6 py-4 font-mono text-blue-600">-g, --global</td>
-                                    <td class="px-6 py-4">安装到用户全局目录而非当前项目</td>
-                                </tr>
-                                <tr>
-                                    <td class="px-6 py-4 font-mono text-blue-600">-a, --agent &lt;agents...&gt;</td>
-                                    <td class="px-6 py-4">指定目标代理：opencode, claude-code, codex, cursor, antigravity</td>
-                                </tr>
-                                <tr>
-                                    <td class="px-6 py-4 font-mono text-blue-600">-s, --skill &lt;skills...&gt;</td>
-                                    <td class="px-6 py-4">通过名称安装特定技能</td>
-                                </tr>
-                                <tr>
-                                    <td class="px-6 py-4 font-mono text-blue-600">-l, --list</td>
-                                    <td class="px-6 py-4">仅列出可用技能，不进行安装</td>
-                                </tr>
-                                <tr>
-                                    <td class="px-6 py-4 font-mono text-blue-600">-y, --yes</td>
-                                    <td class="px-6 py-4">跳过所有确认提示</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Examples -->
-                <div>
-                    <h3 class="text-xl font-semibold mb-4 text-slate-700">实际案例</h3>
-                    <div class="grid md:grid-cols-2 gap-6">
-                        <div class="bg-white border border-slate-200 p-6 rounded-xl hover:shadow-lg transition">
-                            <p class="text-sm font-bold mb-2">列出仓库中的技能</p>
-                            <code class="text-xs bg-slate-100 p-2 rounded block">npx add-skill vercel-labs/agent-skills --list</code>
-                        </div>
-                        <div class="bg-white border border-slate-200 p-6 rounded-xl hover:shadow-lg transition">
-                            <p class="text-sm font-bold mb-2">安装特定技能</p>
-                            <code class="text-xs bg-slate-100 p-2 rounded block">npx add-skill vercel-labs/agent-skills --skill frontend-design</code>
-                        </div>
-                        <div class="bg-white border border-slate-200 p-6 rounded-xl hover:shadow-lg transition">
-                            <p class="text-sm font-bold mb-2">全局安装到特定代理</p>
-                            <code class="text-xs bg-slate-100 p-2 rounded block">npx add-skill vercel-labs/agent-skills -g -a claude-code</code>
-                        </div>
-                        <div class="bg-white border border-slate-200 p-6 rounded-xl hover:shadow-lg transition">
-                            <p class="text-sm font-bold mb-2">一键安装全部技能</p>
-                            <code class="text-xs bg-slate-100 p-2 rounded block">npx add-skill vercel-labs/agent-skills -y -g</code>
-                        </div>
-                    </div>
-                </div>
+                <a href="https://skills.sh" target="_blank"
+                    class="font-mono text-xs uppercase tracking-widest flex items-center gap-2 text-zinc-400 hover:text-white transition-colors">
+                    进入生态图谱数据库 <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+                </a>
             </div>
-        </section>
 
-        <!-- Section: Installation Paths -->
-        <section id="installation" class="scroll-mt-24">
-            <h2 class="text-3xl font-bold mb-4">安装路径</h2>
-            <p class="text-slate-600 mb-8">CLI 会根据作用域和代理类型将技能安装到不同位置：</p>
-            
-            <div class="grid md:grid-cols-2 gap-8">
-                <div class="space-y-4">
-                    <h4 class="font-bold flex items-center"><i class="fas fa-folder-open mr-2 text-yellow-500"></i> 项目级别 (默认)</h4>
-                    <p class="text-sm text-slate-500">安装在当前工作目录。建议将其提交到 Git 仓库与团队共享。</p>
-                    <div class="border border-slate-200 rounded-lg overflow-hidden text-sm">
-                        <div class="bg-slate-50 border-b p-3 font-semibold">项目路径映射</div>
-                        <div class="divide-y divide-slate-100">
-                            <div class="p-3 flex justify-between"><span class="font-mono">OpenCode</span><span class="text-slate-400">.opencode/skill/</span></div>
-                            <div class="p-3 flex justify-between"><span class="font-mono">Claude Code</span><span class="text-slate-400">.claude/skills/</span></div>
-                            <div class="p-3 flex justify-between"><span class="font-mono">Cursor</span><span class="text-slate-400">.cursor/skills/</span></div>
-                            <div class="p-3 flex justify-between"><span class="font-mono">Antigravity</span><span class="text-slate-400">.agent/skills/</span></div>
+            <div class="grid md:grid-cols-3 gap-6">
+                <!-- Large Panel -->
+                <div class="md:col-span-2 bento-panel p-8 md:p-12 flex flex-col justify-between">
+                    <div>
+                        <div
+                            class="w-12 h-12 border border-carbon-600 bg-carbon-900 flex items-center justify-center mb-8">
+                            <i data-lucide="layers" class="text-accent-lime w-6 h-6"></i>
+                        </div>
+                        <h3 class="font-display text-2xl font-bold mb-4">核心多态解析引擎 (Polymorphic Sources)</h3>
+                        <p class="text-zinc-400 text-lg mb-8 max-w-xl">
+                            支持直接从本地系统绝对路径、远端 GitHub 注册表短链或非标准目录深层树结构分发技能。
+                            CLI 内置引擎将对 Git 架构自动进行拓扑解析。
+                        </p>
+                    </div>
+                    <div class="grid sm:grid-cols-2 gap-4">
+                        <div class="border border-carbon-700 bg-carbon-950 p-5">
+                            <p
+                                class="font-mono text-[10px] text-zinc-500 uppercase tracking-widest mb-3 border-b border-carbon-800 pb-2">
+                                仓库短链解析 [EXEC]</p>
+                            <code class="font-mono text-accent-cyan text-sm">skills add owner/repo</code>
+                        </div>
+                        <div class="border border-carbon-700 bg-carbon-950 p-5">
+                            <p
+                                class="font-mono text-[10px] text-zinc-500 uppercase tracking-widest mb-3 border-b border-carbon-800 pb-2">
+                                远程目录剥离 [EXEC]</p>
+                            <code class="font-mono text-accent-cyan text-sm">skills add https://../tree/main/sub</code>
                         </div>
                     </div>
                 </div>
-                <div class="space-y-4">
-                    <h4 class="font-bold flex items-center"><i class="fas fa-globe mr-2 text-blue-500"></i> 全局级别 (--global)</h4>
-                    <p class="text-sm text-slate-500">安装在用户根目录。在所有项目中均可使用。</p>
-                    <div class="border border-slate-200 rounded-lg overflow-hidden text-sm">
-                        <div class="bg-slate-50 border-b p-3 font-semibold">全局路径映射</div>
-                        <div class="divide-y divide-slate-100">
-                            <div class="p-3 flex justify-between"><span class="font-mono">OpenCode</span><span class="text-slate-400">~/.config/opencode/skill/</span></div>
-                            <div class="p-3 flex justify-between"><span class="font-mono">Claude Code</span><span class="text-slate-400">~/.claude/skills/</span></div>
-                            <div class="p-3 flex justify-between"><span class="font-mono">Cursor</span><span class="text-slate-400">~/.cursor/skills/</span></div>
-                            <div class="p-3 flex justify-between"><span class="font-mono">Antigravity</span><span class="text-slate-400">~/.gemini/antigravity/skills/</span></div>
+
+                <!-- Side Panel -->
+                <div class="bento-panel p-8 md:p-12 flex flex-col">
+                    <div class="w-12 h-12 border border-carbon-600 bg-carbon-900 flex items-center justify-center mb-8">
+                        <i data-lucide="shield-alert" class="text-accent-cyan w-6 h-6"></i>
+                    </div>
+                    <h4 class="font-display text-xl font-bold mb-4">强制隔离作用域</h4>
+                    <p class="text-zinc-400 mb-8">
+                        执行层建立沙盒机制，严格隔离 <strong class="text-white">项目级 (Project)</strong> 依赖树与
+                        <strong class="text-white">系统全局级 (Global)</strong> 越权应用映射。
+                    </p>
+                    <div class="mt-auto space-y-4 font-mono text-sm border-t border-carbon-700 pt-6">
+                        <div class="flex justify-between items-center text-zinc-300">
+                            <span>局部工作区</span>
+                            <span class="text-carbon-600">./&lt;agent&gt;/skills/</span>
+                        </div>
+                        <div class="flex justify-between items-center text-zinc-300">
+                            <span>全系统覆写 [-g]</span>
+                            <span class="text-carbon-600">~/&lt;agent&gt;/skills/</span>
                         </div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Section: Agent Detection -->
-        <section class="scroll-mt-24 bg-white border border-slate-200 rounded-2xl p-8">
-            <h2 class="text-2xl font-bold mb-4 flex items-center text-slate-800">
-                <i class="fas fa-search mr-3 text-blue-500"></i>助手自动检测
+        <!-- Command Reference (Strict Matrix) -->
+        <section id="commands" class="max-w-[1440px] mx-auto px-6">
+            <h2 class="font-display text-3xl mb-8 flex items-center gap-4 uppercase font-bold tracking-tight">
+                <div class="w-3 h-3 bg-white"></div> 执行层_指令矩阵
             </h2>
-            <p class="text-slate-600 leading-relaxed">
-                CLI 会通过检查各个助手的配置目录，自动检测您当前系统中已安装的编程助手。
-                如果未检测到任何助手，工具会主动提示您手动选择需要安装的目标平台。
-            </p>
-        </section>
 
-        <!-- Section: Creation -->
-        <section id="creation" class="scroll-mt-24">
-            <h2 class="text-3xl font-bold mb-8">创建技能</h2>
-            <div class="bg-slate-900 rounded-2xl p-8 text-slate-300">
-                <p class="mb-6">技能是包含 <code>SKILL.md</code> 文件的目录，文件必须包含 YAML 前置数据：</p>
-                <div class="code-block rounded-lg p-6 font-mono text-sm border border-slate-700">
-<span class="text-slate-500">---
-name: my-skill
-description: 描述此技能的功能以及何时使用它
----</span>
-
-# 我的技能
-
-当此技能被激活时，AI 助手需要遵循的指令。
-
-## 使用场景
-
-描述此技能应该在哪些场景下被调用。
-
-## 步骤
-
-1. 首先，执行此操作
-2. 然后，执行彼操作
-                </div>
-                
-                <div class="grid md:grid-cols-2 gap-8 mt-10">
-                    <div>
-                        <h4 class="text-white font-bold mb-3">必需字段</h4>
-                        <ul class="space-y-2 text-sm">
-                            <li><span class="text-blue-400 font-mono">name</span>: 唯一标识符（小写，允许连字符）</li>
-                            <li><span class="text-blue-400 font-mono">description</span>: 技能功能的简要说明</li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h4 class="text-white font-bold mb-3">技能发现</h4>
-                        <p class="text-sm leading-relaxed">CLI 会在仓库的多个标准路径（如 <code>skills/</code>, <code>.cursor/skills/</code> 等）搜索技能。如果未找到，将进行递归搜索。</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Section: Compatibility -->
-        <section class="scroll-mt-24">
-            <h2 class="text-3xl font-bold mb-8">核心兼容性</h2>
-            <div class="overflow-hidden border border-slate-200 rounded-xl">
-                <table class="w-full text-left text-sm">
-                    <thead class="bg-slate-100 text-slate-600 border-b border-slate-200">
+            <div class="overflow-x-auto">
+                <table class="tech-table">
+                    <thead>
                         <tr>
-                            <th class="px-6 py-4 font-semibold">功能特性</th>
-                            <th class="px-6 py-4 text-center">OpenCode</th>
-                            <th class="px-6 py-4 text-center">Claude Code</th>
-                            <th class="px-6 py-4 text-center">Codex</th>
-                            <th class="px-6 py-4 text-center">Cursor</th>
-                            <th class="px-6 py-4 text-center">Antigravity</th>
+                            <th class="w-1/3">底层调用 (Command String)</th>
+                            <th>执行日志详解 (Execution Details)</th>
+                            <th class="w-32 text-center">系统标识符</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100 text-center">
+                    <tbody class="font-sans text-sm">
                         <tr>
-                            <td class="px-6 py-4 text-left font-medium">基础技能支持</td>
-                            <td class="px-6 py-4 text-green-600 font-bold">Yes</td>
-                            <td class="px-6 py-4 text-green-600 font-bold">Yes</td>
-                            <td class="px-6 py-4 text-green-600 font-bold">Yes</td>
-                            <td class="px-6 py-4 text-green-600 font-bold">Yes</td>
-                            <td class="px-6 py-4 text-green-600 font-bold">Yes</td>
+                            <td>
+                                <div class="font-mono text-accent-cyan text-base font-bold mb-1">&gt; skills add
+                                    &lt;src&gt;</div>
+                                <div class="font-mono text-[10px] text-carbon-600">[ 安装_例程 ]</div>
+                            </td>
+                            <td class="text-zinc-400">
+                                挂载外部核心。将识别到的外部有效技能包强制编译进当前智能体交互总线。兼容一切标准协议包标识法。
+                                <div
+                                    class="mt-3 p-3 bg-carbon-950 border border-carbon-700 font-mono text-xs text-zinc-300">
+                                    skills add vercel-labs/agent-skills -g --all
+                                </div>
+                            </td>
+                            <td class="text-center font-mono text-xs text-zinc-500 space-y-1">
+                                <div>-g</div>
+                                <div>-a</div>
+                                <div>-s</div>
+                                <div>-l</div>
+                                <div>-y</div>
+                                <div>--all</div>
+                            </td>
                         </tr>
                         <tr>
-                            <td class="px-6 py-4 text-left font-medium">工具白名单 (allowed-tools)</td>
-                            <td class="px-6 py-4 text-green-600 font-bold">Yes</td>
-                            <td class="px-6 py-4 text-green-600 font-bold">Yes</td>
-                            <td class="px-6 py-4 text-green-600 font-bold">Yes</td>
-                            <td class="px-6 py-4 text-green-600 font-bold">Yes</td>
-                            <td class="px-6 py-4 text-green-600 font-bold">Yes</td>
+                            <td>
+                                <div class="font-mono text-accent-cyan text-base font-bold mb-1">&gt; skills list [ls]
+                                </div>
+                                <div class="font-mono text-[10px] text-carbon-600">[ 状态_稽核 ]</div>
+                            </td>
+                            <td class="text-zinc-400">
+                                执行深度寻址操作。打印出当前作用域内，系统已被授权访问及实例化的所有技能单元总账。
+                            </td>
+                            <td class="text-center font-mono text-xs text-zinc-500 space-y-1">
+                                <div>-g</div>
+                                <div>-a</div>
+                            </td>
                         </tr>
                         <tr>
-                            <td class="px-6 py-4 text-left font-medium">Hooks 钩子</td>
-                            <td class="px-6 py-4 text-slate-300">No</td>
-                            <td class="px-6 py-4 text-green-600 font-bold">Yes</td>
-                            <td class="px-6 py-4 text-slate-300">No</td>
-                            <td class="px-6 py-4 text-slate-300">No</td>
-                            <td class="px-6 py-4 text-slate-300">No</td>
+                            <td>
+                                <div class="font-mono text-accent-cyan text-base font-bold mb-1">&gt; skills check /
+                                    update</div>
+                                <div class="font-mono text-[10px] text-carbon-600">[ 节点_同频 ]</div>
+                            </td>
+                            <td class="text-zinc-400">
+                                高频探针检测。直连外网源分支仓库进行 Hash 对等对比，针对滞后模块展开无缝式原子热更操作。
+                            </td>
+                            <td class="text-center font-mono text-xs text-zinc-500 space-y-1">
+                                <div>-y</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <div class="font-mono text-accent-cyan text-base font-bold mb-1">&gt; skills find
+                                    [query]
+                                </div>
+                                <div class="font-mono text-[10px] text-carbon-600">[ 语义_查询 ]</div>
+                            </td>
+                            <td class="text-zinc-400">
+                                基于关键字在本地或生态注册表中进行模糊匹配。支持交互式筛选模式。
+                            </td>
+                            <td class="text-center font-mono text-xs text-carbon-600">-</td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <div class="font-mono text-accent-cyan text-base font-bold mb-1">&gt; skills init [name]
+                                </div>
+                                <div class="font-mono text-[10px] text-carbon-600">[ 模板_分发 ]</div>
+                            </td>
+                            <td class="text-zinc-400">
+                                在当前路径实例化一个标准的 <code class="font-mono text-accent-cyan">SKILL.md</code> 模板定义。
+                            </td>
+                            <td class="text-center font-mono text-xs text-carbon-600">-</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </section>
 
-        <!-- Troubleshooting -->
-        <section class="bg-slate-50 border border-slate-200 rounded-2xl p-8">
-            <h2 class="text-2xl font-bold mb-6 flex items-center"><i class="fas fa-tools mr-3 text-slate-400"></i> 故障排除</h2>
-            <div class="grid md:grid-cols-3 gap-8">
-                <div>
-                    <h5 class="font-bold text-sm mb-2">未发现技能？</h5>
-                    <p class="text-xs text-slate-500">确保仓库包含有效的 <code>SKILL.md</code> 文件，且 YAML 前置数据包含 name 和 description。</p>
+        <!-- Compatibility Matrix Section (New from README) -->
+        <section id="agents" class="max-w-[1440px] mx-auto px-6">
+            <h2 class="font-display text-3xl mb-8 flex items-center gap-4 uppercase font-bold tracking-tight">
+                <div class="w-3 h-3 bg-accent-lime"></div> 底座兼容性_兼容性矩阵
+            </h2>
+            <div class="overflow-x-auto">
+                <table class="tech-table">
+                    <thead>
+                        <tr>
+                            <th>特性单元 (Feature)</th>
+                            <th class="text-center">Claude Code</th>
+                            <th class="text-center">Antigravity</th>
+                            <th class="text-center">Cursor</th>
+                            <th class="text-center">Cline</th>
+                            <th class="text-center">OpenCode</th>
+                        </tr>
+                    </thead>
+                    <tbody class="font-sans text-sm text-center">
+                        <tr>
+                            <td class="text-left font-bold">基础技能 (Basic skills)</td>
+                            <td class="text-accent-cyan font-bold">YES</td>
+                            <td class="text-accent-cyan font-bold">YES</td>
+                            <td class="text-accent-cyan font-bold">YES</td>
+                            <td class="text-accent-cyan font-bold">YES</td>
+                            <td class="text-accent-cyan font-bold">YES</td>
+                        </tr>
+                        <tr>
+                            <td class="text-left font-bold">工具授权 (allowed-tools)</td>
+                            <td class="text-accent-cyan font-bold">YES</td>
+                            <td class="text-accent-cyan font-bold">YES</td>
+                            <td class="text-accent-cyan font-bold">YES</td>
+                            <td class="text-accent-cyan font-bold">YES</td>
+                            <td class="text-accent-cyan font-bold">YES</td>
+                        </tr>
+                        <tr>
+                            <td class="text-left font-bold">环境分叉 (context: fork)</td>
+                            <td class="text-accent-cyan font-bold">YES</td>
+                            <td class="text-carbon-600">NO</td>
+                            <td class="text-carbon-600">NO</td>
+                            <td class="text-carbon-600">NO</td>
+                            <td class="text-carbon-600">NO</td>
+                        </tr>
+                        <tr>
+                            <td class="text-left font-bold">钩子 (Hooks)</td>
+                            <td class="text-accent-cyan font-bold">YES</td>
+                            <td class="text-carbon-600">NO</td>
+                            <td class="text-carbon-600">NO</td>
+                            <td class="text-accent-cyan font-bold">YES</td>
+                            <td class="text-carbon-600">NO</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Development Environment -->
+        <section id="create" class="max-w-[1440px] mx-auto px-6">
+            <div class="grid lg:grid-cols-5 gap-12 items-start">
+                <div class="lg:col-span-2 space-y-8">
+                    <div
+                        class="font-mono text-xs border-l-2 border-accent-lime pl-4 text-zinc-400 uppercase tracking-widest">
+                        [开发套件_热启动]
+                    </div>
+                    <h2 class="font-display text-4xl font-bold tracking-tight uppercase">配置化<br />底层约束器
+                    </h2>
+                    <p class="font-sans text-zinc-400 text-lg">
+                        所有标准的 Agent 动作行为表现，均依赖严格遵循 <a href="https://agentskills.io" target="_blank"
+                            class="text-accent-cyan hover:underline">Agent Skills 规范</a>。您可以随时初始化自己的 <code
+                            class="font-mono text-accent-cyan text-sm px-1 border border-carbon-700 bg-carbon-900">SKILL.md</code>
+                        控制节点。
+                    </p>
+                    <button
+                        class="font-mono text-sm font-bold bg-[#EDEDED] text-[#030303] px-8 py-4 uppercase tracking-widest hover:bg-accent-lime transition-all border border-[#EDEDED] flex items-center gap-4">
+                        <i data-lucide="terminal-square" class="w-5 h-5"></i> npx skills init
+                    </button>
                 </div>
-                <div>
-                    <h5 class="font-bold text-sm mb-2">技能未加载？</h5>
-                    <p class="text-xs text-slate-500">验证安装路径是否正确，并检查代理的官方文档以了解技能加载的具体要求。</p>
-                </div>
-                <div>
-                    <h5 class="font-bold text-sm mb-2">权限错误？</h5>
-                    <p class="text-xs text-slate-500">确保你对目标安装目录具有写入权限，尤其是在使用全局安装 (-g) 时。</p>
+
+                <div class="lg:col-span-3">
+                    <div class="bento-panel code-block font-mono text-sm flex flex-col h-full">
+                        <div
+                            class="h-10 border-b border-carbon-700 bg-carbon-950 flex items-center px-4 justify-between text-zinc-500">
+                            <div>SKILL.md</div>
+                            <div class="text-[10px] uppercase">元数据描述块_解析中</div>
+                        </div>
+                        <div class="p-8 text-zinc-300 leading-relaxed overflow-x-auto">
+                            <pre>
+<span class="text-carbon-600">---</span>
+<span class="text-accent-cyan">name:</span> core-code-auditor
+<span class="text-accent-cyan">description:</span> 强校验前端源码质量及极简工程架构特征提取逻辑
+<span class="text-carbon-600">---</span>
+
+<span class="text-white font-bold"># 高维代码审查协议系统</span>
+
+您的任务是作为一名资深前端架构师审核提交的代码。
+
+<span class="text-accent-lime font-bold">## 审核准则</span>
+<span class="text-zinc-500">1.</span> 检查是否存在硬编码的色值。
+<span class="text-zinc-500">2.</span> 识别并标记三层以上的嵌套 map。
+<span class="text-zinc-500">3.</span> 确保所有的 Lucide 图标都正确导入。</pre>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
 
-        <!-- Section: Related Links -->
-        <section class="scroll-mt-24">
-            <h2 class="text-3xl font-bold mb-8">相关链接</h2>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <a href="https://github.com/vercel-labs/agent-skills" class="flex flex-col p-4 bg-white border border-slate-200 rounded-xl hover:border-blue-500 transition">
-                    <span class="text-xs text-slate-400 mb-1">官方仓库</span>
-                    <span class="text-sm font-bold">Vercel Agent Skills</span>
-                </a>
-                <a href="https://agentskills.io" class="flex flex-col p-4 bg-white border border-slate-200 rounded-xl hover:border-blue-500 transition">
-                    <span class="text-xs text-slate-400 mb-1">规范标准</span>
-                    <span class="text-sm font-bold">Agent Skills Spec</span>
-                </a>
-                <a href="https://opencode.ai/docs/skills" class="flex flex-col p-4 bg-white border border-slate-200 rounded-xl hover:border-blue-500 transition">
-                    <span class="text-xs text-slate-400 mb-1">文档</span>
-                    <span class="text-sm font-bold">OpenCode Docs</span>
-                </a>
-                <a href="https://code.claude.com/docs/en/skills" class="flex flex-col p-4 bg-white border border-slate-200 rounded-xl hover:border-blue-500 transition">
-                    <span class="text-xs text-slate-400 mb-1">文档</span>
-                    <span class="text-sm font-bold">Claude Code Docs</span>
-                </a>
+        <!-- Advanced Telemetry & Systems -->
+        <section class="max-w-[1440px] mx-auto px-6 pt-12 border-t border-carbon-700">
+            <div class="grid md:grid-cols-2 gap-12">
+                <div>
+                    <h3
+                        class="font-display text-xl uppercase font-bold border-b border-carbon-700 pb-4 mb-6 text-zinc-300">
+                        系统环境变量_门限控制
+                    </h3>
+                    <div class="space-y-4">
+                        <div class="border border-carbon-700 bg-carbon-900 p-6 flex items-start gap-4">
+                            <div class="mt-1"><i data-lucide="power" class="w-5 h-5 text-accent-orange"></i></div>
+                            <div>
+                                <div class="font-mono text-sm font-bold text-white mb-2">INSTALL_INTERNAL_SKILLS <span
+                                        class="bg-carbon-950 px-2 py-0.5 border border-carbon-800 text-[10px] ml-2 text-zinc-500">DEF:
+                                        0</span></div>
+                                <p class="text-zinc-400 text-sm">强行解除非稳态包拦截器保护。设置为 <code>1</code> 以开启内部测试技能的安装支持。</p>
+                            </div>
+                        </div>
+                        <div class="border border-carbon-700 bg-carbon-900 p-6 flex items-start gap-4">
+                            <div class="mt-1"><i data-lucide="radio" class="w-5 h-5 text-accent-cyan"></i></div>
+                            <div>
+                                <div class="font-mono text-sm font-bold text-white mb-2">DISABLE_TELEMETRY /
+                                    DO_NOT_TRACK <span
+                                        class="bg-carbon-950 px-2 py-0.5 border border-carbon-800 text-[10px] ml-2 text-zinc-500">DEF:
+                                        0</span></div>
+                                <p class="text-zinc-400 text-sm">彻底终止并掐断底层异步使用指标回传链路。Agent Skills 始终尊重用户的隐私安全。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <h3
+                        class="font-display text-xl uppercase font-bold border-b border-carbon-700 pb-4 mb-6 text-zinc-300">
+                        异常诊断_日志 (FAQ)
+                    </h3>
+                    <div class="space-y-4 font-sans">
+                        <div class="border border-carbon-700 bg-carbon-950 p-6">
+                            <h4 class="font-bold text-white mb-2">ERR: NO_SKILL_LOCATED</h4>
+                            <p class="text-zinc-400 text-sm border-l-2 border-carbon-700 pl-3 py-1">
+                                确保仓库根目录下包含 <code>SKILL.md</code> 文件，且 YAML Frontmatter 格式完全正确。
+                            </p>
+                        </div>
+                        <div class="border border-carbon-700 bg-carbon-950 p-6">
+                            <h4 class="font-bold text-white mb-2">ERR: PERMISSION_DENIED</h4>
+                            <p class="text-zinc-400 text-sm border-l-2 border-carbon-700 pl-3 py-1">
+                                全局模式安装可能需要系统管理员权限。请调整 <code>~/.npm-global</code> 权限或使用提权进程。
+                            </p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-white border-t border-slate-200 py-12 mt-24">
-        <div class="max-w-7xl mx-auto px-4 text-center">
-            <p class="text-slate-400 text-sm mb-4">基于 Vercel Labs add-skill 项目文档创建</p>
-            <div class="flex justify-center space-x-6">
-                <a href="https://agentskills.io" class="text-slate-500 hover:text-blue-600 text-xs">规范文档</a>
-                <a href="https://github.com/vercel-labs/add-skill" class="text-slate-500 hover:text-blue-600 text-xs">GitHub 源码</a>
+    <!-- Monolithic Footer -->
+    <footer class="pt-24 pb-12 mt-24 border-t border-carbon-700 bg-[#000]">
+        <div class="max-w-[1440px] mx-auto px-6">
+            <div class="grid md:grid-cols-4 gap-12 mb-24">
+                <div class="md:col-span-2 space-y-8">
+                    <span
+                        class="font-display font-bold text-2xl tracking-widest uppercase flex items-center gap-3 text-white">
+                        <i data-lucide="cpu" class="w-6 h-6 text-carbon-600"></i> AGENT_SKILLS
+                    </span>
+                    <p class="font-sans text-zinc-500 max-w-sm">
+                        定义机器模型与工程插件通信交互标准的非妥协协议。本控制端专为严酷且精准的自主式计算未来进行核心级封装。
+                    </p>
+                    <div class="flex gap-4">
+                        <a href="https://github.com/vercel-labs/agent-skills" target="_blank"
+                            class="w-10 h-10 border border-carbon-700 flex items-center justify-center hover:bg-white hover:text-black transition-colors"><i
+                                data-lucide="github" class="w-4 h-4"></i></a>
+                        <a href="https://twitter.com/vercel" target="_blank"
+                            class="w-10 h-10 border border-carbon-700 flex items-center justify-center hover:bg-white hover:text-black transition-colors"><i
+                                data-lucide="twitter" class="w-4 h-4"></i></a>
+                    </div>
+                </div>
+
+                <div>
+                    <h6
+                        class="font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-600 border-b border-carbon-800 pb-4 mb-6">
+                        系统导航_图谱节点</h6>
+                    <ul class="space-y-4 font-mono text-xs font-bold uppercase tracking-widest text-zinc-400">
+                        <li><a href="https://skills.sh" target="_blank"
+                                class="hover:text-white transition-colors">技能市场注册表_DB</a></li>
+                        <li><a href="https://agentskills.io" target="_blank"
+                                class="hover:text-white transition-colors">开发基准文档_Spec</a></li>
+                        <li><a href="https://github.com/vercel-labs/agent-skills/releases" target="_blank"
+                                class="hover:text-white transition-colors">物理层更新_Log</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h6
+                        class="font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-600 border-b border-carbon-800 pb-4 mb-6">
+                        规范协议_强制条款</h6>
+                    <ul class="space-y-4 font-mono text-xs font-bold uppercase tracking-widest text-zinc-400">
+                        <li><a href="https://github.com/vercel-labs/agent-skills/blob/main/LICENSE" target="_blank"
+                                class="hover:text-white transition-colors">MIT_强制开源许可证</a></li>
+                        <li><a href="https://antigravity.google/docs/skills" target="_blank"
+                                class="hover:text-white transition-colors">Antigravity_集成语义规范</a></li>
+                        <li><a href="https://code.claude.com/docs/en/skills" target="_blank"
+                                class="hover:text-white transition-colors">ClaudeCode_插件生态协议</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div
+                class="pt-8 border-t border-carbon-800 flex flex-col md:flex-row justify-between items-center gap-6 font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-600">
+                <div>SYS // 2026 THE OPEN AGENT SKILLS REGISTRY. </div>
+                <div class="flex items-center gap-3">
+                    <div class="w-1.5 h-1.5 bg-accent-lime"></div>
+                    SYSTEM_OPERATIONAL [系统运行响应正常]
+                </div>
             </div>
         </div>
     </footer>
 
     <script>
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                alert('已复制到剪贴板: ' + text);
-            });
-        }
+        lucide.createIcons();
     </script>
 </body>
+
 </html>
